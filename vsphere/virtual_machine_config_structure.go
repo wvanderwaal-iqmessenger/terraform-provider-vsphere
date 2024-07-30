@@ -332,7 +332,7 @@ func schemaVirtualMachineConfigSpec() map[string]*schema.Schema {
 		},
 		"vapp_transport": {
 			Type:        schema.TypeList,
-			Computed:    true,
+			Optional:    true,
 			Description: "vApp transport methods supported by virtual machine.",
 			Elem:        &schema.Schema{Type: schema.TypeString},
 		},
@@ -700,14 +700,26 @@ func flattenExtraConfig(d *schema.ResourceData, opts []types.BaseOptionValue) er
 	return d.Set("extra_config", ec)
 }
 
-// expandVAppConfig reads in all the vapp key/value pairs and returns
-// the appropriate VmConfigSpec.
+// expandVAppConfig reads in all the vapp key/value pairs and the
+// values for vapp_transport, then returns the appropriate VmConfigSpec.
 //
 // We track changes to keys to determine if any have been removed from
 // configuration - if they have, we add them with an empty value to ensure
 // they are removed from vAppConfig on the update.
 func expandVAppConfig(d *schema.ResourceData, client *govmomi.Client) (*types.VmConfigSpec, error) {
+	vappTransport := structure.SliceInterfacesToStrings(d.Get("vapp_transport").([]interface{}))
+
 	if !d.HasChange("vapp") {
+
+		// This doesn't require a reboot to configure this value.
+		// But it does to take effect, but that will be left to the user.
+		if d.HasChange("vapp_transport") {
+
+			return &types.VmConfigSpec{
+				OvfEnvironmentTransport: vappTransport,
+			}, nil
+		}
+
 		return nil, nil
 	}
 
@@ -816,7 +828,8 @@ func expandVAppConfig(d *schema.ResourceData, client *govmomi.Client) (*types.Vm
 	}
 
 	return &types.VmConfigSpec{
-		Property: props,
+		Property:                props,
+		OvfEnvironmentTransport: vappTransport,
 	}, nil
 }
 
